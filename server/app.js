@@ -97,6 +97,23 @@ app.post("/api/sync", (req, res) => {
     }
 });
 
+<<<<<<< HEAD
+=======
+// Route principale
+app.get("/", (req, res) => {
+    if (!fs.existsSync(INDEX_FILE)) {
+        return res.status(404).send(`index.html introuvable : ${INDEX_FILE}`);
+    }
+
+    res.sendFile(INDEX_FILE);
+});
+
+// 404
+app.use((req, res) => {
+    res.status(404).send(`Route introuvable : ${req.method} ${req.url}`);
+});
+
+>>>>>>> 85acea0 (fix render port)
 app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server lancé sur le port ${PORT}`);
 });
