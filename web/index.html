@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>STRX WL - Galerie</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="bg-black text-white min-h-screen">
+
+<div class="max-w-7xl mx-auto p-6">
+
+  <!-- HEADER -->
+  <h1 class="text-2xl font-semibold mb-6">Galerie STRX WL</h1>
+
+  <!-- FILTRES -->
+  <div class="flex flex-wrap gap-3 mb-6">
+
+    <input id="search" placeholder="Rechercher"
+      class="bg-neutral-900 border border-neutral-700 px-4 py-2 rounded w-full md:w-64">
+
+    <select id="category"
+      class="bg-neutral-900 border border-neutral-700 px-4 py-2 rounded">
+      <option value="all">Toutes catégories</option>
+    </select>
+
+    <label class="flex items-center gap-2">
+      <input type="checkbox" id="favoritesOnly">
+      Favoris
+    </label>
+
+    <button id="syncBtn"
+      class="bg-yellow-700 px-4 py-2 rounded">
+      Synchroniser
+    </button>
+
+  </div>
+
+  <!-- STATUS -->
+  <div id="status" class="text-sm text-neutral-400 mb-4"></div>
+
+  <!-- GRID -->
+  <div id="grid" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4"></div>
+
+  <!-- PAGINATION -->
+  <div class="flex justify-center items-center gap-3 mt-8">
+    <button id="prevBtn" class="bg-neutral-800 px-4 py-2 rounded">Précédent</button>
+    <span id="pageInfo"></span>
+    <button id="nextBtn" class="bg-neutral-800 px-4 py-2 rounded">Suivant</button>
+  </div>
+
+</div>
+
+<script>
+let allItems = [];
+let filteredItems = [];
+let currentPage = 1;
+const ITEMS_PER_PAGE = 120;
+
+const favorites = JSON.parse(localStorage.getItem("favorites") || "[]");
+
+const grid = document.getElementById("grid");
+const search = document.getElementById("search");
+const categorySelect = document.getElementById("category");
+const favoritesOnly = document.getElementById("favoritesOnly");
+const pageInfo = document.getElementById("pageInfo");
+const status = document.getElementById("status");
+
+// 👉 catégorie auto simple
+function getCategory(name) {
+  if (name.includes("weapon") || name.includes("ammo")) return "Armes";
+  if (name.includes("food") || name.includes("sandwich")) return "Nourriture";
+  if (name.includes("med") || name.includes("bandage")) return "Médical";
+  return "Divers";
+}
+
+function buildCategories() {
+  const categories = ["all"];
+  allItems.forEach(i => {
+    const cat = getCategory(i.name);
+    if (!categories.includes(cat)) categories.push(cat);
+  });
+
+  categories.forEach(cat => {
+    const opt = document.createElement("option");
+    opt.value = cat;
+    opt.textContent = cat;
+    categorySelect.appendChild(opt);
+  });
+}
+
+function toggleFavorite(name) {
+  const index = favorites.indexOf(name);
+
+  if (index === -1) {
+    favorites.push(name);
+  } else {
+    favorites.splice(index, 1);
+  }
+
+  localStorage.setItem("favorites", JSON.stringify(favorites));
+  applyFilter();
+}
+
+function createCard(item) {
+  const div = document.createElement("div");
+  div.className = "bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden relative";
+
+  const star = document.createElement("div");
+  star.textContent = favorites.includes(item.name) ? "★" : "☆";
+  star.className = "absolute top-2 right-2 cursor-pointer text-yellow-400 text-lg";
+  star.onclick = () => toggleFavorite(item.name);
+
+  const img = document.createElement("img");
+  img.src = `/images/${item.file}`;
+  img.className = "w-full h-32 object-contain p-2";
+
+  const name = document.createElement("div");
+  name.textContent = item.name;
+  name.className = "text-center p-2 text-sm border-t border-neutral-800";
+
+  div.appendChild(star);
+  div.appendChild(img);
+  div.appendChild(name);
+
+  return div;
+}
+
+function render() {
+  grid.innerHTML = "";
+
+  const start = (currentPage - 1) * ITEMS_PER_PAGE;
+  const pageItems = filteredItems.slice(start, start + ITEMS_PER_PAGE);
+
+  pageItems.forEach(item => grid.appendChild(createCard(item)));
+
+  const totalPages = Math.ceil(filteredItems.length / ITEMS_PER_PAGE);
+  pageInfo.textContent = `${currentPage} / ${totalPages}`;
+  status.textContent = `${filteredItems.length} items`;
+
+}
+
+function applyFilter() {
+  const s = search.value.toLowerCase();
+
+  filteredItems = allItems.filter(item => {
+    const matchSearch = item.name.includes(s);
+    const matchFav = !favoritesOnly.checked || favorites.includes(item.name);
+    const matchCat =
+      categorySelect.value === "all" ||
+      getCategory(item.name) === categorySelect.value;
+
+    return matchSearch && matchFav && matchCat;
+  });
+
+  currentPage = 1;
+  render();
+}
+
+document.getElementById("prevBtn").onclick = () => {
+  if (currentPage > 1) {
+    currentPage--;
+    render();
+  }
+};
+
+document.getElementById("nextBtn").onclick = () => {
+  const totalPages = Math.ceil(filteredItems.length / ITEMS_PER_PAGE);
+  if (currentPage < totalPages) {
+    currentPage++;
+    render();
+  }
+};
+
+search.oninput = applyFilter;
+categorySelect.onchange = applyFilter;
+favoritesOnly.onchange = applyFilter;
+
+async function load() {
+  const res = await fetch("/api/images");
+  allItems = await res.json();
+
+  buildCategories();
+  filteredItems = allItems;
+  render();
+}
+
+document.getElementById("syncBtn").onclick = async () => {
+  await fetch("/api/sync", { method: "POST" });
+  alert("Synchronisé !");
+};
+
+load();
+</script>
+
+</body>
+</html>
