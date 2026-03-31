@@ -8,30 +8,27 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 const WEB_DIR = path.resolve(__dirname, "../web");
 const INDEX_FILE = path.resolve(WEB_DIR, "index.html");
 const IMAGE_DIR = path.resolve(__dirname, "../sync/images");
 
-// Mets ici le vrai chemin de ton inventaire
+// Sur Render, la sync locale vers ton PC ne fonctionnera pas.
+// Tu peux laisser cette variable, mais /api/sync échouera si le dossier n'existe pas.
 const INVENTORY_PATH = "C:/fxserver/resources/[ox]/ox_inventory/web/images";
 
-console.log("WEB_DIR =", WEB_DIR);
-console.log("INDEX_FILE =", INDEX_FILE);
-console.log("IMAGE_DIR =", IMAGE_DIR);
-console.log("INDEX exists =", fs.existsSync(INDEX_FILE));
-console.log("IMAGE_DIR exists =", fs.existsSync(IMAGE_DIR));
-
-// Log de toutes les requêtes
 app.use((req, res, next) => {
-    console.log(`[${new Date().toLocaleTimeString()}] ${req.method} ${req.url}`);
+    console.log(`${req.method} ${req.url}`);
     next();
 });
 
-// Sert les images
 app.use("/images", express.static(IMAGE_DIR));
+app.use(express.static(WEB_DIR));
 
-// API test
+app.get("/", (req, res) => {
+    res.sendFile(INDEX_FILE);
+});
+
 app.get("/api/test", (req, res) => {
     res.json({
         ok: true,
@@ -44,43 +41,48 @@ app.get("/api/test", (req, res) => {
     });
 });
 
-// API images
 app.get("/api/images", (req, res) => {
     try {
         if (!fs.existsSync(IMAGE_DIR)) {
-            return res.status(404).json({ error: "Dossier images introuvable", path: IMAGE_DIR });
+            return res.status(404).json({
+                error: "Dossier images introuvable",
+                path: IMAGE_DIR
+            });
         }
 
         const files = fs.readdirSync(IMAGE_DIR);
+        const imageFiles = files.filter(file => /\.(png|jpg|jpeg|webp)$/i.test(file));
 
-        const images = files
-            .filter(file => /\.(png|jpg|jpeg|webp)$/i.test(file))
-            .map((file, index) => ({
-                id: index + 1,
-                name: path.parse(file).name,
-                file
-            }));
+        const images = imageFiles.map((file, index) => ({
+            id: index + 1,
+            name: path.parse(file).name,
+            file
+        }));
 
         res.json(images);
     } catch (error) {
         console.error("Erreur /api/images :", error);
-        res.status(500).json({ error: "Impossible de lire les images" });
+        res.status(500).json({
+            error: "Impossible de lire les images",
+            details: String(error)
+        });
     }
 });
 
-// API sync
 app.post("/api/sync", (req, res) => {
     try {
         if (!fs.existsSync(IMAGE_DIR)) {
-            return res.status(404).json({ error: "Dossier source introuvable", path: IMAGE_DIR });
+            return res.status(404).json({ error: "Dossier source introuvable" });
         }
 
         if (!fs.existsSync(INVENTORY_PATH)) {
-            return res.status(404).json({ error: "Dossier inventaire introuvable", path: INVENTORY_PATH });
+            return res.status(404).json({
+                error: "Dossier inventaire introuvable",
+                path: INVENTORY_PATH
+            });
         }
 
-        const files = fs.readdirSync(IMAGE_DIR)
-            .filter(file => /\.(png|jpg|jpeg|webp)$/i.test(file));
+        const files = fs.readdirSync(IMAGE_DIR).filter(file => /\.(png|jpg|jpeg|webp)$/i.test(file));
 
         for (const file of files) {
             const src = path.join(IMAGE_DIR, file);
@@ -95,22 +97,6 @@ app.post("/api/sync", (req, res) => {
     }
 });
 
-// Route principale
-app.get("/", (req, res) => {
-    if (!fs.existsSync(INDEX_FILE)) {
-        return res.status(404).send(`index.html introuvable : ${INDEX_FILE}`);
-    }
-
-    res.sendFile(INDEX_FILE);
-});
-
-// 404
-app.use((req, res) => {
-    res.status(404).send(`Route introuvable : ${req.method} ${req.url}`);
-});
-
-const PORT = process.env.PORT || 3000;
-
 app.listen(PORT, "0.0.0.0", () => {
-    console.log("Server lancé");
+    console.log(`Server lancé sur le port ${PORT}`);
 });
